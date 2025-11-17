@@ -1,52 +1,35 @@
-name: Build & Deploy to EC2 via GHCR
+name: Build & Deploy to EC2
 
 on:
   push:
     branches:
-      - master  # Run this when you push to main branch
+      - main  # Trigger on push to main branch
 
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout the latest code
+      # 1️⃣ Checkout latest code
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2️⃣ Set username to lowercase (once, for all steps)
-      - name: Set lowercase username
-        id: vars
-        run: echo "username=$(echo '${{ secrets.GHCR_USERNAME }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
-
-      # 3️⃣ Log in to GitHub Container Registry
-      - name: Log in to GHCR
-        run: echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ steps.vars.outputs.username }} --password-stdin
-
-      # 4️⃣ Build Docker image
-      - name: Build Docker image
-        run: |
-          echo "🚧 Building image for ${{ steps.vars.outputs.username }}..."
-          docker build -t ghcr.io/${{ steps.vars.outputs.username }}/cloud-demo:latest .
-          echo "✅ Build complete!"
-      # 5️⃣ Push Docker image to GHCR
-      - name: Push Docker image
-        run: |
-          echo "📦 Pushing image to GitHub Container Registry..."
-          docker push ghcr.io/${{ steps.vars.outputs.username }}/cloud-demo:latest
-          echo "✅ Image pushed successfully!"
-      # 6️⃣ SSH into EC2 and deploy the container
-      - name: Deploy on EC2
+      # 2️⃣ Copy SSH key and set permissions
+      - name: Set up SSH
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/my-key.pem
           chmod 600 ~/.ssh/my-key.pem
-          echo "🚀 Connecting to EC2 and deploying container..."
+
+      # 3️⃣ Deploy to EC2
+      - name: Build and Run Docker on EC2
+        run: |
+          echo "🚀 Connecting to EC2 and deploying..."
           ssh -i ~/.ssh/my-key.pem -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "
-            docker login ghcr.io -u ${{ steps.vars.outputs.username }} -p ${{ secrets.GHCR_TOKEN }} &&
-            docker pull ghcr.io/${{ steps.vars.outputs.username }}/cloud-demo:latest &&
-            docker stop cloud-demo || true &&
-            docker rm cloud-demo || true &&
-            docker run -d -p 3001:3001 --name cloud-demo ghcr.io/${{ steps.vars.outputs.username }}/cloud-demo:latest
+            cd ~/basic-website || exit 1
+            docker stop basic-website || true
+            docker rm basic-website || true
+            docker build -t basic-website:latest .
+            docker run -d -p 80:80 --name basic-website basic-website:latest
           "
           echo "✅ Deployment finished!"
