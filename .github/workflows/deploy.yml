@@ -3,7 +3,7 @@ name: Build & Deploy to EC2 via GHCR
 on:
   push:
     branches:
-      - main   # Run this when you push to main branch
+      - master  # Run this when you push to main branch
 
 jobs:
   build-and-deploy:
